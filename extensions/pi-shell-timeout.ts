@@ -39,6 +39,12 @@
  *
  *     node pi-shell-timeout.ts --selfcheck
  *
+ * It also announces itself: the first injection in a process writes one stderr line
+ * (`PI_SHELL_TIMEOUT_INJECTED seconds=300 tool=bash`). Without it, a loaded extension that works
+ * and a missing one look identical from the outside until a command actually hangs. One line per
+ * process, so a run with many shell calls stays quiet; the daemon captures pi's stderr, so it lands
+ * in the daemon log under a `pi:stderr` tag.
+ *
  * MOUNTING
  * --------
  * Drop this file in pi's extension discovery directory (`~/.pi/agent/extensions/`) or point
@@ -84,9 +90,19 @@ export function applyShellTimeout(event) {
 }
 
 export default function piShellTimeout(pi) {
+	// Announce the FIRST injection per process. The mechanism is otherwise invisible: an extension
+	// that stopped loading looks exactly like one that never fires, and both look like the timeout
+	// simply never being needed. One line per process keeps a run with many shell calls quiet.
+	let announced = false;
 	pi.on("tool_call", async (event) => {
 		try {
-			applyShellTimeout(event);
+			if (applyShellTimeout(event) !== "injected") return;
+			if (announced) return;
+			announced = true;
+			const tool = typeof event?.toolName === "string" ? event.toolName : "?";
+			process.stderr.write(
+				`PI_SHELL_TIMEOUT_INJECTED seconds=${DEFAULT_SHELL_TIMEOUT_SECONDS} tool=${tool}\n`,
+			);
 		} catch (err) {
 			process.stderr.write(
 				`PI_SHELL_TIMEOUT_UNAVAILABLE reason=${err && err.name ? err.name : "unknown"}\n`,
@@ -128,6 +144,27 @@ if (process.argv[1] && process.argv[1].endsWith("pi-shell-timeout.ts")) {
 	const registered = [];
 	piShellTimeout({ on: (name) => registered.push(name) });
 	check("registers the tool_call hook", registered.join(","), "tool_call");
+
+	// Drive the entry point itself so the announcement is covered rather than assumed: one line, on
+	// the first injection only, naming the value and the tool. Capture stderr for the duration.
+	{
+		let handler;
+		piShellTimeout({ on: (_name, h) => { handler = h; } });
+		const captured = [];
+		const realWrite = process.stderr.write;
+		process.stderr.write = (chunk) => { captured.push(String(chunk)); return true; };
+		try {
+			await handler({ toolName: "bash", input: { command: "a" } });
+			await handler({ toolName: "bash", input: { command: "b" } });
+			await handler({ toolName: "bash", input: { command: "c", timeout: 5 } });
+			await handler({ toolName: "read", input: { path: "x" } });
+		} finally {
+			process.stderr.write = realWrite;
+		}
+		check("announces the first injection only", captured.length, 1);
+		check("  and the line names the default", (captured[0] || "").includes("seconds=300"), true);
+		check("  and the tool that was bounded", (captured[0] || "").includes("tool=bash"), true);
+	}
 
 	const failed = checks.filter((c) => !c.ok);
 	for (const c of checks) {
