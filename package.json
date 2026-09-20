@@ -1,19 +1,17 @@
 {
-  "name": "pi-shell-timeout",
-  "version": "1.0.2",
-  "description": "Give a shell tool call that omits `timeout` a default, without patching pi.",
-  "keywords": [
-    "pi-package"
-  ],
+  "name": "pi-extensions",
+  "version": "1.1.0",
+  "description": "Two dependency-free pi extensions: a default shell timeout, and conditional ponytail injection on coding turns.",
+  "keywords": ["pi-package"],
   "license": "MIT",
   "private": true,
   "type": "module",
   "pi": {
-    "extensions": [
-      "./extensions"
-    ]
+    "extensions": ["./extensions"]
   },
   "scripts": {
-    "selfcheck": "node extensions/pi-shell-timeout.ts --selfcheck"
+    "selfcheck": "node extensions/pi-shell-timeout.ts --selfcheck",
+    "selfcheck:ponytail": "node extensions/ponytail-always.ts --selfcheck",
+    "selfcheck:all": "npm run selfcheck && npm run selfcheck:ponytail"
   }
 }
