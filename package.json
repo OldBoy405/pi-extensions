@@ -1,0 +1,15 @@
+{
+  "name": "pi-shell-timeout",
+  "version": "1.0.0",
+  "description": "Give a shell tool call that omits `timeout` a default, without patching pi.",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "scripts": {
+    "selfcheck": "node extensions/pi-shell-timeout.ts --selfcheck"
+  }
+}
